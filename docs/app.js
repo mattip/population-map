@@ -8,7 +8,85 @@ var GROUPS = [
   { key: 'foreign', en: 'Foreign',       he: 'זרים' }
 ];
 
-var fmt = new Intl.NumberFormat('en-US');
+var SOURCE_URL = 'https://www.cbs.gov.il/he/publications/Pages/2019/' +
+  '%D7%99%D7%99%D7%A9%D7%95%D7%91%D7%99%D7%9D-%D7%91%D7%99%D7%A9%D7%A8%D7%90%D7%9C.aspx';
+
+/* ------------------------------------------------------------------ i18n */
+
+var lang = storedLang();
+var fmt = new Intl.NumberFormat(window.STRINGS[lang].locale);
+
+function storedLang() {
+  var saved;
+  try { saved = localStorage.getItem('lang'); } catch (err) { saved = null; }
+  if (saved && window.STRINGS[saved]) return saved;
+  return /^he\b/.test(navigator.language || '') ? 'he' : 'en';
+}
+
+function t(key, vars) {
+  var text = window.STRINGS[lang][key];
+  if (text === undefined) text = window.STRINGS.en[key];
+  if (text === undefined) return key;
+  return vars ? text.replace(/\{(\w+)\}/g, function (m, k) {
+    return vars[k] === undefined ? m : vars[k];
+  }) : text;
+}
+
+/* The group's name in the current language, and in the other one — the panel
+   shows both, so a Hebrew reader still sees the English label and vice versa. */
+function groupName(g) { return lang === 'he' ? g.he : g.en; }
+
+/* Localities carry a Hebrew name and a transliteration; show whichever matches
+   the language being read, falling back to the Hebrew one. */
+function placeName(p) {
+  return (lang === 'he' ? p.name_he : p.name_en) || p.name_he;
+}
+
+function setLang(next) {
+  if (!window.STRINGS[next]) return;
+  lang = next;
+  try { localStorage.setItem('lang', lang); } catch (err) { /* private mode */ }
+  applyLang();
+}
+
+function applyLang() {
+  var strings = window.STRINGS[lang];
+  fmt = new Intl.NumberFormat(strings.locale);
+
+  var root = document.documentElement;
+  root.lang = lang;
+  root.dir = strings.dir;
+  document.title = strings.docTitle;
+
+  document.querySelectorAll('[data-i18n]').forEach(function (el) {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach(function (el) {
+    el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  });
+  document.querySelectorAll('.lang button').forEach(function (b) {
+    b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+  });
+
+  document.getElementById('source-note').innerHTML = t('source', { url: SOURCE_URL });
+
+  if (map.zoomControl) {
+    map.zoomControl._zoomInButton.title = strings.dir === 'rtl' ? 'הגדלה' : 'Zoom in';
+    map.zoomControl._zoomOutButton.title = strings.dir === 'rtl' ? 'הקטנה' : 'Zoom out';
+  }
+
+  if (places.length) {
+    map.invalidateSize();   // RTL puts the panel on the other side
+    renderPlaceLabels();
+    renderLegend();
+    render();
+    drawHandles();
+    if (tool) hint(t('hint' + tool.charAt(0).toUpperCase() + tool.slice(1)));
+  }
+}
 
 var colorCache = {};
 
@@ -45,6 +123,8 @@ map.attributionControl.setPrefix('');
 
 // Esri's gray canvas: a quiet basemap, keyless, base and labels as separate
 // layers so the place names can sit above the data dots.
+var LABEL_HANDOVER_ZOOM = 11;   // basemap labels up to here, our own beyond
+
 var ESRI = 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/';
 var TILES = {
   light: ESRI + 'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
@@ -71,7 +151,11 @@ function paintBasemap() {
   if (baseTiles) map.removeLayer(baseTiles);
   if (labelTiles) map.removeLayer(labelTiles);
   baseTiles = L.tileLayer(TILES[mode], { attribution: ATTR, maxZoom: 16 }).addTo(map);
-  labelTiles = L.tileLayer(LABELS[mode], { maxZoom: 16, pane: 'labels' }).addTo(map);
+  // Esri's reference layer serves an empty tile at z12 everywhere, and nothing
+  // at all over sparse country at z13+. Rather than live with the gap we stop
+  // using it past z11 and draw locality names from our own data instead —
+  // which also makes the names follow the language selector.
+  labelTiles = L.tileLayer(LABELS[mode], { maxZoom: LABEL_HANDOVER_ZOOM, pane: 'labels' }).addTo(map);
 }
 paintBasemap();
 darkMedia.addEventListener('change', function () {
@@ -80,6 +164,52 @@ darkMedia.addEventListener('change', function () {
   restyleShape();
   if (places.length) render();
 });
+
+/* --------------------------------------------------- locality name labels */
+
+var LABEL_MAX = 70;   // never crowd the view with more names than this
+
+map.createPane('placeLabels').style.zIndex = 460;
+map.getPane('placeLabels').style.pointerEvents = 'none';
+
+var labelLayer = L.layerGroup();
+
+/* Smallest locality worth naming at a given zoom. */
+function labelThreshold(zoom) {
+  if (zoom >= 15) return 0;
+  if (zoom === 14) return 400;
+  if (zoom === 13) return 1500;
+  return 5000;
+}
+
+function renderPlaceLabels() {
+  labelLayer.clearLayers();
+  var zoom = map.getZoom();
+  if (zoom <= LABEL_HANDOVER_ZOOM || !places.length) return;
+
+  var bounds = map.getBounds();
+  var floor = labelThreshold(zoom);
+  var shown = 0;
+  // places is sorted largest first, so this naturally keeps the big names.
+  for (var i = 0; i < places.length && shown < LABEL_MAX; i++) {
+    var p = places[i];
+    if (p.total < floor || !bounds.contains([p.lat, p.lon])) continue;
+    if (selection && !contains(p)) continue;
+    L.marker([p.lat, p.lon], {
+      pane: 'placeLabels',
+      interactive: false,
+      keyboard: false,
+      icon: L.divIcon({
+        className: 'place-label',
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+        html: '<span style="top:' + Math.round(radius(p.total) + 3) + 'px">' +
+              esc(placeName(p)) + '</span>'
+      })
+    }).addTo(labelLayer);
+    shown++;
+  }
+}
 
 /* ----------------------------------------------------------------- data */
 
@@ -109,7 +239,12 @@ function start(data) {
   });
 
   countryBounds = L.latLngBounds(places.map(function (p) { return [p.lat, p.lon]; }));
+  labelLayer.addTo(map);
+  map.on('moveend', renderPlaceLabels);
   renderLegend();
+  // Re-fit Leaflet to the container: switching to RTL moves the panel to the
+  // other side, so the map pane's size may have changed under it.
+  map.invalidateSize();
   applyHash(location.hash);   // calls render(), and sets the view if one was shared
   map.on('moveend', writeHash);
   window.addEventListener('hashchange', function () {
@@ -142,6 +277,7 @@ function radius(total) {
 
 map.on('zoomend', function () {
   markers.forEach(function (m, i) { m.setRadius(radius(places[i].total)); });
+  renderPlaceLabels();
   // A zoom changes how big the selection looks, so whether the centre handle
   // fits can change with it.
   if (selection && !tool) drawHandles();
@@ -151,13 +287,13 @@ function tooltip(p) {
   var rows = GROUPS.map(function (g) {
     if (!p[g.key]) return '';
     return '<div class="tip-row"><span class="chip ' + g.key + '"></span>' +
-           '<span>' + g.en + '</span>' +
+           '<span>' + esc(groupName(g)) + '</span>' +
            '<span class="tip-total">' + fmt.format(p[g.key]) + '</span></div>';
   }).join('');
-  return '<div class="tip-name"><bdi>' + esc(p.name_he) + '</bdi></div>' +
-         '<div class="tip-sub">' + esc(p.name_en) + ' &middot; ' + esc(p.subdistrict) + '</div>' +
+  return '<div class="tip-name"><bdi>' + esc(placeName(p)) + '</bdi></div>' +
+         '<div class="tip-sub"><bdi>' + esc(p.subdistrict) + '</bdi></div>' +
          '<div class="tip-row"><strong class="tip-total">' + fmt.format(p.total) + '</strong>' +
-         '<span class="tip-sub">total</span></div>' + rows;
+         '<span class="tip-sub">' + esc(t('tipTotal')) + '</span></div>' + rows;
 }
 
 function flyTo(p) {
@@ -212,6 +348,7 @@ function setSelection(sel, layer) {
   selection = sel;
   render();
   drawHandles();
+  renderPlaceLabels();
   writeHash();
 }
 
@@ -262,7 +399,12 @@ function shapePixelSize() {
 
 function drawHandles() {
   clearHandles();
-  document.getElementById('edit-hint').hidden = !selection;
+  var editHint = document.getElementById('edit-hint');
+  editHint.hidden = !selection;
+  editHint.innerHTML = selection ? t('editHint', {
+    corner: '<span class="handle-swatch"></span>',
+    centre: '<span class="handle-swatch move"></span>'
+  }) : '';
   if (!selection || tool) return;
 
   selectionPoints().forEach(function (pt, i) {
@@ -271,7 +413,7 @@ function drawHandles() {
       draggable: true,
       keyboard: false,
       zIndexOffset: 1000,
-      title: selection.kind === 'rect' ? 'Drag to resize' : 'Drag to reshape'
+      title: t(selection.kind === 'rect' ? 'resizeTitle' : 'reshapeTitle')
     });
     h.on('drag', function () { dragVertex(i, h.getLatLng()); });
     h.on('dragend', commitEdit);
@@ -289,7 +431,7 @@ function drawHandles() {
     draggable: true,
     keyboard: false,
     zIndexOffset: 1001,
-    title: 'Drag to move the whole selection'
+    title: t('moveTitle')
   });
   moveHandle.on('dragstart', function () {
     dragFrom = {
@@ -360,6 +502,7 @@ function commitEdit() {
   dragFrom = null;
   render();
   drawHandles();
+  renderPlaceLabels();
   writeHash();
 }
 
@@ -398,9 +541,9 @@ function setTool(next) {
   if (tool === 'poly') map.doubleClickZoom.disable();
   else map.doubleClickZoom.enable();
 
-  hint(tool === 'rect' ? 'Drag to draw a rectangle' :
-       tool === 'lasso' ? 'Drag to trace an outline' :
-       tool === 'poly' ? 'Click to add corners · double-click or Enter to close · Esc to cancel' : '');
+  hint(tool === 'rect' ? t('hintRect') :
+       tool === 'lasso' ? t('hintLasso') :
+       tool === 'poly' ? t('hintPoly') : '');
 }
 
 function hint(text) {
@@ -492,8 +635,8 @@ map.on('click', function (e) {
     }).addTo(map)
   );
   hint(polyDraft.points.length < 3
-    ? 'Click to add corners · ' + polyDraft.points.length + ' so far'
-    : 'Double-click, press Enter, or click the first corner to close');
+    ? t('hintPolyCount', { n: polyDraft.points.length })
+    : t('hintPolyClose'));
 });
 
 map.on('dblclick', function () { if (tool === 'poly') closePolygon(); });
@@ -626,6 +769,7 @@ function applyHash(hash) {
   }
   selection = restored;
   drawHandles();
+  renderPlaceLabels();
 
   var view = /^(\d+)\/(-?[\d.]+)\/(-?[\d.]+)$/.exec(query.v || '');
   if (view) map.setView([+view[2], +view[3]], +view[1]);
@@ -638,16 +782,16 @@ function applyHash(hash) {
 function copyLink() {
   writeHash();
   var url = location.href;
-  var button = document.getElementById('permalink');
+  var button = document.getElementById('permalink-label');
   var said = function (text) {
     button.textContent = text;
     clearTimeout(copyLink.timer);
-    copyLink.timer = setTimeout(function () { button.textContent = 'Copy link'; }, 2000);
+    copyLink.timer = setTimeout(function () { button.textContent = t('permalink'); }, 2000);
   };
 
   if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(url).then(function () { said('Copied'); },
-                                            function () { said('Press Ctrl+C'); fallbackCopy(url, said); });
+    navigator.clipboard.writeText(url).then(function () { said(t('copied')); },
+                                            function () { fallbackCopy(url, said); });
   } else {
     // file:// and plain http are not secure contexts, so the clipboard API is
     // unavailable there; select the text instead and let the user copy it.
@@ -665,7 +809,7 @@ function fallbackCopy(url, said) {
   var ok = false;
   try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
   document.body.removeChild(box);
-  said(ok ? 'Copied' : 'Copy from the address bar');
+  said(ok ? t('copied') : t('copyManually'));
 }
 
 /* --------------------------------------------------------------- totals */
@@ -693,15 +837,14 @@ function render(skipList) {
   });
 
   document.getElementById('scope-label').textContent =
-    selection ? (selection.kind === 'rect' ? 'Inside the rectangle' : 'Inside the traced area')
-              : 'All localities, whole country';
+    selection ? t(selection.kind === 'rect' ? 'scopeRect' : 'scopePoly') : t('scopeAll');
   document.getElementById('zoom-sel').hidden = !selection;
 
+  var places_ = sum.count === 1 ? t('onePlace') : t('manyPlaces', { n: fmt.format(sum.count) });
   document.getElementById('total-value').textContent = fmt.format(sum.total);
-  document.getElementById('place-count').textContent =
-    sum.count === 1 ? '1 locality' : fmt.format(sum.count) + ' localities';
+  document.getElementById('hero-label').textContent = t('peopleCount', { places: places_ });
   document.getElementById('total-share').textContent = selection && national
-    ? pct(sum.total, national.total) + ' of the ' + fmt.format(national.total) + ' nationwide'
+    ? t('shareOfCountry', { share: pct(sum.total, national.total), total: fmt.format(national.total) })
     : '';
 
   renderStack(sum);
@@ -720,19 +863,18 @@ function renderStack(sum) {
   }).join('');
 
   document.getElementById('stack-desc').textContent = GROUPS.map(function (g) {
-    return g.en + ' ' + fmt.format(sum[g.key]) + ' (' + pct(sum[g.key], sum.total) + ')';
+    return groupName(g) + ' ' + fmt.format(sum[g.key]) + ' (' + pct(sum[g.key], sum.total) + ')';
   }).join(', ');
 }
 
 function renderBreakdown(sum) {
   document.getElementById('breakdown').innerHTML = GROUPS.map(function (g) {
     return '<tr>' +
-      '<td><span class="label"><span class="chip ' + g.key + '"></span>' + g.en +
-      ' <bdi class="he">' + g.he + '</bdi></span></td>' +
+      '<td><span class="label"><span class="chip ' + g.key + '"></span>' + esc(groupName(g)) + '</span></td>' +
       '<td>' + fmt.format(sum[g.key]) + '</td>' +
       '<td class="share">' + pct(sum[g.key], sum.total) + '</td></tr>';
   }).join('') +
-    '<tr><td><span class="label"><strong>Total</strong> <bdi class="he">סך הכל</bdi></span></td>' +
+    '<tr><td><span class="label"><strong>' + esc(t('total')) + '</strong></span></td>' +
     '<td><strong>' + fmt.format(sum.total) + '</strong></td><td class="share">100%</td></tr>';
 }
 
@@ -740,23 +882,22 @@ var LIST_CAP = 250;   // keep the DOM light; the CSV carries every row
 
 function renderList() {
   document.getElementById('list-count').textContent =
-    selected.length ? '(' + fmt.format(selected.length) + ', largest first)' : '';
+    selected.length ? t('listCount', { n: fmt.format(selected.length) }) : '';
 
   var note = document.getElementById('list-note');
   note.hidden = selected.length <= LIST_CAP;
   note.textContent = note.hidden ? '' :
-    'Showing the largest ' + LIST_CAP + ' of ' + fmt.format(selected.length) +
-    ' localities. The totals above and the CSV cover all of them.';
+    t('listNote', { cap: LIST_CAP, n: fmt.format(selected.length) });
 
   var body = document.getElementById('list');
   if (!selected.length) {
-    body.innerHTML = '<tr class="empty-row"><td colspan="5">No localities inside the selection</td></tr>';
+    body.innerHTML = '<tr class="empty-row"><td colspan="5">' + esc(t('listEmpty')) + '</td></tr>';
     return;
   }
   body.innerHTML = selected.slice(0, LIST_CAP).map(function (p, i) {
     return '<tr data-i="' + i + '">' +
-      '<td class="name" title="' + esc(p.name_he) + ' — ' + esc(p.name_en) + ', ' + esc(p.subdistrict) + '">' +
-      '<bdi>' + esc(p.name_he) + '</bdi><span class="en">' + esc(p.name_en) + '</span></td>' +
+      '<td class="name" title="' + esc(placeName(p)) + ' · ' + esc(p.subdistrict) + '">' +
+      '<bdi>' + esc(placeName(p)) + '</bdi></td>' +
       '<td class="num">' + fmt.format(p.total) + '</td>' +
       '<td class="num">' + fmt.format(p.jews) + '</td>' +
       '<td class="num">' + fmt.format(p.arabs) + '</td>' +
@@ -771,9 +912,10 @@ document.getElementById('list').addEventListener('click', function (ev) {
 
 function renderLegend() {
   document.getElementById('legend-colors').innerHTML =
-    '<span class="legend-text" style="margin:0">Largest group:</span>' +
+    '<span class="legend-text" style="margin:0">' + esc(t('legendLargest')) + '</span>' +
     GROUPS.map(function (g) {
-      return '<span class="legend-item"><span class="chip ' + g.key + '"></span>' + g.en + '</span>';
+      return '<span class="legend-item"><span class="chip ' + g.key + '"></span>' +
+             esc(groupName(g)) + '</span>';
     }).join('');
 }
 
@@ -786,6 +928,10 @@ document.querySelectorAll('.tool[data-tool]').forEach(function (b) {
 document.getElementById('clear').addEventListener('click', function () {
   setTool(null);
   clearSelection();
+});
+
+document.querySelectorAll('.lang button').forEach(function (b) {
+  b.addEventListener('click', function () { setLang(b.dataset.lang); });
 });
 
 document.getElementById('permalink').addEventListener('click', copyLink);
@@ -844,9 +990,11 @@ document.addEventListener('keydown', function (ev) {
    do not. */
 
 function loadFailed(err) {
-  document.getElementById('total-value').textContent = 'no data';
-  document.getElementById('scope-label').textContent = 'could not load the data — ' + err.message;
+  document.getElementById('total-value').textContent = t('noData');
+  document.getElementById('scope-label').textContent = t('loadError', { message: err.message });
 }
+
+applyLang();
 
 if (window.POPULATION_DATA) {
   start(window.POPULATION_DATA);

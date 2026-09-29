@@ -6,6 +6,11 @@ the panel reports the totals inside it: overall population, Jews & others
 (יהודים ואחרים), Arabs (ערבים) and foreign residents (זרים), plus the list of
 localities and a CSV of the selection.
 
+The interface is available in **English and Hebrew** — pick one in the top
+right; Hebrew switches the whole page to right-to-left. The choice is
+remembered in the browser, and the first visit follows the browser's own
+language.
+
 A drawn shape stays editable — drag its corners to reshape it, drag the centre
 to slide the whole thing somewhere else, and the totals follow as you drag.
 Every view is a shareable link: **Copy link** puts the map position and the
@@ -80,6 +85,7 @@ docs/
   index.html           page structure
   style.css            layout and the light/dark palette
   app.js               map, the three selection tools, totals, permalinks
+  strings.js           every UI string, one block per language
   data.js              generated — loaded by the page
   data.json            generated — the same data, for other consumers
   vendor/leaflet/      Leaflet 1.9.4, vendored so the site has no CDN dependency
@@ -121,6 +127,22 @@ A freehand lasso is thinned to its meaningful corners before it goes in, so even
 a long trace stays a couple of hundred characters. A link with no shape in it
 just opens the whole country; a mangled one degrades to the same rather than
 failing.
+
+## Adding a language
+
+All UI text lives in `docs/strings.js`, one block per language. To add one:
+
+1. Copy the `en` block, translate the values, and give it the language's code
+   as its key. `dir` is `ltr` or `rtl`; `locale` is what `Intl.NumberFormat`
+   uses to group digits.
+2. Add a button to the `.lang` group in `index.html`:
+   `<button type="button" data-lang="xx" lang="xx">Name</button>`.
+
+Nothing else needs touching — the layout is written with logical properties
+(`inset-inline-start`, `text-align: start`), so an RTL language mirrors on its
+own. Locality names come from the CBS file itself and stay Hebrew plus
+transliteration in every language, as do the CSV column headers, which are
+meant to be machine-readable.
 
 ## Keyboard
 

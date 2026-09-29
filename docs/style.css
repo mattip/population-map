@@ -83,7 +83,40 @@ html, body {
   font-weight: 400;
 }
 
+.bar-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.lang {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.lang button {
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 0;
+  cursor: pointer;
+}
+
+.lang button + button { border-inline-start: 1px solid var(--border); }
+.lang button:hover { background: var(--hover-wash); }
+
+.lang button[aria-pressed="true"] {
+  color: var(--surface-1);
+  background: var(--select-ink);
+}
 
 .tool {
   display: inline-flex;
@@ -169,6 +202,33 @@ html, body {
 .chip.arabs { background: var(--series-arabs); }
 .chip.foreign { background: var(--series-foreign); }
 
+/* Locality names drawn from our own data above zoom 11, where the basemap's
+   label layer goes quiet. The icon box is zero-sized and sits exactly on the
+   dot; the span centres itself under it. */
+.place-label {
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  background: none;
+  border: 0;
+}
+
+.place-label span {
+  position: absolute;
+  left: 0;                    /* physical on purpose: this centres the span on
+                                 the dot, which has no reading direction */
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  /* a halo in the surface colour keeps the name legible over any tile */
+  text-shadow:
+     1px  1px 0 var(--surface-1), -1px  1px 0 var(--surface-1),
+     1px -1px 0 var(--surface-1), -1px -1px 0 var(--surface-1),
+     0 2px 3px var(--surface-1);
+}
+
 /* ---------- side panel ---------- */
 
 #panel {
@@ -176,7 +236,7 @@ html, body {
   overflow-y: auto;
   padding: 16px;
   background: var(--surface-1);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
 }
 
 #panel h2 {
@@ -311,9 +371,6 @@ html, body {
   transition: flex-basis 0.18s ease;
 }
 
-.stack .seg:first-child { border-radius: 4px 2px 2px 4px; }
-.stack .seg:last-child { border-radius: 2px 4px 4px 2px; }
-.stack .seg:only-child { border-radius: 4px; }
 .stack .seg.jews { background: var(--series-jews); }
 .stack .seg.arabs { background: var(--series-arabs); }
 .stack .seg.foreign { background: var(--series-foreign); }
@@ -337,13 +394,13 @@ table { width: 100%; border-collapse: collapse; }
 .breakdown th,
 .breakdown td {
   padding: 5px 0;
-  text-align: right;
+  text-align: end;
   font-variant-numeric: tabular-nums;
   border-bottom: 1px solid var(--grid);
 }
 
 .breakdown th:first-child,
-.breakdown td:first-child { text-align: left; font-variant-numeric: normal; }
+.breakdown td:first-child { text-align: start; font-variant-numeric: normal; }
 
 .breakdown thead th {
   font-size: 11px;
@@ -359,11 +416,6 @@ table { width: 100%; border-collapse: collapse; }
   display: flex;
   gap: 7px;
   align-items: baseline;
-}
-
-.breakdown .he {
-  color: var(--text-muted);
-  font-size: 12px;
 }
 
 .list-wrap {
@@ -388,13 +440,13 @@ table { width: 100%; border-collapse: collapse; }
   padding: 6px 8px;
   font-size: 10.5px;
   font-weight: 500;
-  text-align: left;
+  text-align: start;
   color: var(--text-muted);
   background: var(--surface-1);
   border-bottom: 1px solid var(--grid);
 }
 
-.list th.num, .list td.num { text-align: right; padding-left: 10px; font-variant-numeric: tabular-nums; }
+.list th.num, .list td.num { text-align: end; padding-inline-start: 10px; font-variant-numeric: tabular-nums; }
 
 .list td {
   padding: 5px 6px;
@@ -416,13 +468,8 @@ table { width: 100%; border-collapse: collapse; }
 
 /* Hebrew is the authoritative name; keep both lines flush with the column
    edge so the RTL line does not float away from the transliteration. */
-.list td.name bdi { display: block; text-align: left; }
+.list td.name bdi { display: block; text-align: start; }
 
-.list td.name .en {
-  display: block;
-  font-size: 11px;
-  color: var(--text-muted);
-}
 .list .empty-row td { text-align: center; color: var(--text-muted); cursor: default; padding: 18px 8px; }
 
 .list-note {
@@ -452,7 +499,7 @@ table { width: 100%; border-collapse: collapse; }
    ones (see the media query at the bottom), which is why it lives in #panel. */
 #legend {
   position: fixed;
-  left: 12px;
+  inset-inline-start: 12px;
   bottom: 22px;
   z-index: 600;
   display: flex;
@@ -470,7 +517,7 @@ table { width: 100%; border-collapse: collapse; }
 .legend-row { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 .legend-row.sizes { gap: 4px; padding-top: 6px; border-top: 1px solid var(--grid); }
 .legend-item { display: flex; gap: 5px; align-items: center; }
-.legend-text { margin-left: 6px; color: var(--text-muted); }
+.legend-text { margin-inline-start: 6px; color: var(--text-muted); }
 
 .bubble {
   display: inline-block;
