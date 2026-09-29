@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Israel population by locality, 2023</title>
+<meta name="description" content="Select an area of the map — by rectangle, lasso or polygon — and read off the population totals inside it. CBS 2023 locality data.">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <header id="topbar">
+    <h1>Israel population by locality <span class="year">2023</span></h1>
+
+    <div class="tools" role="toolbar" aria-label="Selection tools">
+      <button type="button" class="tool" data-tool="rect" aria-pressed="false" title="Drag on the map to select a rectangle (R)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="4" width="11" height="8" rx="1"/></svg>
+        Rectangle
+      </button>
+      <button type="button" class="tool" data-tool="lasso" aria-pressed="false" title="Drag on the map to trace a freehand outline (L)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3c3 0 5.5 1.6 5.5 3.6S11 10.2 8 10.2 2.5 8.6 2.5 6.6 5 3 8 3Z"/><path d="M5 9.6c-.6 1.2-.4 2.6.6 3.4"/></svg>
+        Lasso
+      </button>
+      <button type="button" class="tool" data-tool="poly" aria-pressed="false" title="Click to place corners, double-click or Enter to close (P)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5 13.5 7l-2 6.5h-7L2.5 7Z"/></svg>
+        Polygon
+      </button>
+      <button type="button" class="tool ghost" id="clear" title="Clear the selection (Esc)">Clear</button>
+      <button type="button" class="tool" id="permalink" title="Copy a link to this view and selection">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.8.8"/><path d="M9.2 6.8a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.8-.8"/></svg>
+        Copy link
+      </button>
+    </div>
+  </header>
+
+  <main id="map" aria-label="Map of localities"></main>
+
+  <aside id="panel">
+    <div id="legend">
+      <div class="legend-row" id="legend-colors"></div>
+      <div class="legend-row sizes">
+        <span class="bubble b1"></span><span class="bubble b2"></span><span class="bubble b3"></span>
+        <span class="legend-text">10k &middot; 100k &middot; 1M people</span>
+      </div>
+    </div>
+
+    <div class="scope">
+      <span id="scope-label">All localities</span>
+      <button type="button" id="zoom-sel" class="linkish" hidden>zoom to selection</button>
+    </div>
+
+    <p class="edit-hint" id="edit-hint" hidden>
+      Drag a <span class="handle-swatch"></span> corner to reshape, or the
+      <span class="handle-swatch move"></span> centre to move the whole selection.
+    </p>
+
+    <div class="hero" aria-live="polite">
+      <div class="hero-value" id="total-value">—</div>
+      <div class="hero-label">people &middot; <span id="place-count">—</span></div>
+      <div class="hero-share" id="total-share"></div>
+    </div>
+
+    <h2>Composition</h2>
+    <div class="stack" id="stack" role="img" aria-labelledby="stack-desc"></div>
+    <p class="visually-hidden" id="stack-desc"></p>
+
+    <table class="breakdown">
+      <thead>
+        <tr><th scope="col">Group</th><th scope="col">People</th><th scope="col">Share</th></tr>
+      </thead>
+      <tbody id="breakdown"></tbody>
+    </table>
+
+    <h2>Localities <span class="count" id="list-count"></span></h2>
+    <div class="list-wrap">
+      <table class="list">
+        <colgroup>
+          <col class="name-col"><col class="total-col"><col class="jews-col"><col class="arabs-col"><col class="foreign-col">
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col" class="num">Total</th>
+            <th scope="col" class="num">Jews &amp; others</th>
+            <th scope="col" class="num">Arabs</th>
+            <th scope="col" class="num">Foreign</th>
+          </tr>
+        </thead>
+        <tbody id="list"></tbody>
+      </table>
+    </div>
+
+    <p class="list-note" id="list-note" hidden></p>
+
+    <div class="panel-foot">
+      <button type="button" id="csv" class="tool ghost">Download CSV</button>
+      <p class="source">
+        Source: Israel Central Bureau of Statistics, <em>List of localities 2023 (final)</em>.
+        Localities whose figures CBS does not publish are omitted. Each locality is
+        one point (its CBS reference coordinate), so a locality counts in full or
+        not at all.
+      </p>
+    </div>
+  </aside>
+</div>
+
+<div id="hint" hidden></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
