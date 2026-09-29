@@ -5,8 +5,9 @@
   --surface-1: #fcfcfb;
   --plane: #f9f9f7;
   --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
+  --text-secondary: #0b0b0b;
+  --text-muted: #0b0b0b;
+  --mark-ink: #898781;      /* legend bubbles and other non-text marks */
   --grid: #e1e0d9;
   --border: rgba(11, 11, 11, 0.10);
   --shadow: 0 1px 3px rgba(11, 11, 11, 0.10), 0 8px 24px rgba(11, 11, 11, 0.06);
@@ -22,8 +23,9 @@
     --surface-1: #1a1a19;
     --plane: #0d0d0d;
     --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
+    --text-secondary: #ffffff;
+    --text-muted: #ffffff;
+    --mark-ink: #898781;
     --grid: #2c2c2a;
     --border: rgba(255, 255, 255, 0.10);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -201,7 +203,7 @@ html, body {
   padding: 0;
   font: inherit;
   font-size: 12px;
-  color: var(--series-jews);
+  color: var(--text-primary);
   background: none;
   border: 0;
   cursor: pointer;
@@ -435,7 +437,13 @@ table { width: 100%; border-collapse: collapse; }
   margin: 12px 0 0;
   font-size: 11px;
   line-height: 1.5;
-  color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+/* Plain ink rather than link blue; the underline carries the affordance. */
+.source a {
+  color: var(--text-primary);
+  text-underline-offset: 2px;
 }
 
 /* ---------- legend & hint ---------- */
@@ -467,7 +475,7 @@ table { width: 100%; border-collapse: collapse; }
 .bubble {
   display: inline-block;
   border-radius: 50%;
-  background: var(--text-muted);
+  background: var(--mark-ink);
   opacity: 0.45;
 }
 

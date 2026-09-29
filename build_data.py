@@ -12,6 +12,8 @@ from openpyxl import load_workbook
 
 from itm import itm_to_wgs84
 
+# Source workbook: Israel CBS, "Localities in Israel", 2023 final file.
+# https://www.cbs.gov.il/he/publications/Pages/2019/%D7%99%D7%99%D7%A9%D7%95%D7%91%D7%99%D7%9D-%D7%91%D7%99%D7%A9%D7%A8%D7%90%D7%9C.aspx
 SRC = os.path.join(os.path.dirname(__file__), "bycode2023Sofi.xlsx")
 DOCS = os.path.join(os.path.dirname(__file__), "docs")
 OUT_JSON = os.path.join(DOCS, "data.json")
@@ -108,6 +110,7 @@ def main():
     data = {
         "year": 2023,
         "source": "Israel CBS, list of localities 2023 (final)",
+        "source_url": "https://www.cbs.gov.il/he/publications/Pages/2019/%D7%99%D7%99%D7%A9%D7%95%D7%91%D7%99%D7%9D-%D7%91%D7%99%D7%A9%D7%A8%D7%90%D7%9C.aspx",
         "fields": ["lat", "lon", "total", "jews", "arabs", "foreign",
                    "name_he", "name_en", "code", "district", "subdistrict"],
         "places": places,

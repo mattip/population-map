@@ -134,5 +134,7 @@ The keys work whenever the map has focus.
 
 ## Source
 
-Israel Central Bureau of Statistics, *List of localities 2023 (final)*
-(`bycode2023Sofi.xlsx`).
+Israel Central Bureau of Statistics, **[יישובים בישראל / Localities in
+Israel](https://www.cbs.gov.il/he/publications/Pages/2019/%D7%99%D7%99%D7%A9%D7%95%D7%91%D7%99%D7%9D-%D7%91%D7%99%D7%A9%D7%A8%D7%90%D7%9C.aspx)** — the *2023 final* file, downloaded as `bycode2023Sofi.xlsx`.
+That page is where newer years appear; drop a later workbook in, point
+`build_data.py` at it and rebuild.
